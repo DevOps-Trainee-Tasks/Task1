@@ -1,19 +1,13 @@
 output "vpc_id" {
   description = "ID of the VPC."
-  value       = aws_vpc.network.id
+  value       = aws_vpc.main_vpc.id
 }
 
-output "public_subnet_ids" {
-  description = "IDs of the two public subnets."
-  value       = aws_subnet.public[*].id
-}
-
-output "app_subnet_ids" {
-  description = "IDs of the two private application subnets."
-  value       = aws_subnet.app[*].id
-}
-
-output "db_subnet_ids" {
-  description = "IDs of the two private database subnets."
-  value       = aws_subnet.db[*].id
+output "subnet_ids" {
+  description = "Subnet IDs grouped in the same order as their configured CIDR lists."
+  value = {
+    for group_name, group in var.subnet_groups : group_name => [
+      for index in range(length(group.cidrs)) : aws_subnet.subnets["${group_name}-${index}"].id
+    ]
+  }
 }

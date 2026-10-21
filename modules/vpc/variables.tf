@@ -1,44 +1,71 @@
+variable "project_name" {
+  description = "Project prefix used for AWS Name tags."
+  type        = string
+}
+
+variable "resource_names" {
+  description = "Names for the VPC, Internet gateway, NAT gateway, and NAT Elastic IP."
+  type = object({
+    vpc              = string
+    internet_gateway = string
+    nat_gateway      = string
+    nat_eip          = string
+  })
+}
+
 variable "vpc_cidr" {
   description = "CIDR block for the VPC."
   type        = string
 }
 
+variable "enable_dns_support" {
+  description = "Whether the VPC supports DNS resolution."
+  type        = bool
+}
+
+variable "enable_dns_hostnames" {
+  description = "Whether the VPC assigns DNS hostnames."
+  type        = bool
+}
+
 variable "availability_zones" {
-  description = "Two availability zones for the subnets."
+  description = "Availability zones assigned to each subnet group in round-robin order."
   type        = list(string)
-
-  validation {
-    condition     = length(var.availability_zones) == 2 && length(distinct(var.availability_zones)) == 2
-    error_message = "Provide two different availability zones."
-  }
 }
 
-variable "public_subnet_cidrs" {
-  description = "CIDR blocks for two public subnets, one per availability zone."
-  type        = list(string)
-
-  validation {
-    condition     = length(var.public_subnet_cidrs) == 2
-    error_message = "Provide exactly two public subnet CIDRs."
-  }
+variable "enable_internet_gateway" {
+  description = "Whether to create an Internet gateway and its configured routes."
+  type        = bool
 }
 
-variable "app_subnet_cidrs" {
-  description = "CIDR blocks for two private application subnets."
-  type        = list(string)
-
-  validation {
-    condition     = length(var.app_subnet_cidrs) == 2
-    error_message = "Provide exactly two application subnet CIDRs."
-  }
+variable "enable_nat_gateway" {
+  description = "Whether to create one NAT gateway, its Elastic IP, and configured routes."
+  type        = bool
 }
 
-variable "db_subnet_cidrs" {
-  description = "CIDR blocks for two private database subnets."
-  type        = list(string)
+variable "subnet_groups" {
+  description = "Subnet groups, their CIDRs, public IP behavior, and route table keys."
+  type = map(object({
+    cidrs                   = list(string)
+    map_public_ip_on_launch = bool
+    route_table             = string
+    name_prefix             = string
+  }))
+}
 
-  validation {
-    condition     = length(var.db_subnet_cidrs) == 2
-    error_message = "Provide exactly two database subnet CIDRs."
-  }
+variable "route_tables" {
+  description = "Route tables with a default route through the internet or NAT gateway."
+  type = map(object({
+    destination_cidr_block = string
+    gateway                = string
+    name                   = string
+  }))
+}
+
+variable "nat_gateway_subnet" {
+  description = "Subnet group and zero-based subnet index that hosts the NAT gateway."
+  type = object({
+    group = string
+    index = number
+  })
 }

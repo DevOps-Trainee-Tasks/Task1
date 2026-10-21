@@ -1,20 +1,24 @@
-variable "name" {
-  description = "Prefix for security group names."
-  type        = string
-}
-
 variable "vpc_id" {
-  description = "VPC ID from the VPC module."
+  description = "VPC ID for the security groups."
   type        = string
 }
 
-variable "ssh_cidr" {
-  description = "Your public IP in CIDR form for bastion SSH, for example 203.0.113.10/32."
-  type        = string
-
-  validation {
-    condition     = can(cidrhost(var.ssh_cidr, 0)) && var.ssh_cidr != "0.0.0.0/0"
-    error_message = "Provide a valid, restricted CIDR for SSH access."
-  }
+variable "security_groups" {
+  description = "Security groups and their ingress and egress rule sets. Ports are TCP or UDP; use protocol -1 with an empty ports list for all traffic."
+  type = map(object({
+    name        = string
+    description = string
+    ingress = map(object({
+      protocol               = string
+      ports                  = list(number)
+      cidr_blocks            = list(string)
+      source_security_groups = list(string)
+    }))
+    egress = map(object({
+      protocol               = string
+      ports                  = list(number)
+      cidr_blocks            = list(string)
+      source_security_groups = list(string)
+    }))
+  }))
 }
-
