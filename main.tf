@@ -11,13 +11,29 @@ provider "aws" {
   region = "us-east-1"
 }
 
+data "aws_ssm_parameter" "amazon_linux_2023_ami" {
+  name = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64"
+}
+
 variable "ssh_cidr" {
   description = "Public IP in CIDR form allowed to reach the bastion over SSH."
   type        = string
 }
 
+variable "ec2_key_pair_name" {
+  description = "Name of an existing AWS EC2 key pair for Bastion and application SSH access."
+  type        = string
+}
+
 locals {
-  project_name = "task1"
+  project_name         = "task1"
+  ollama_port          = 11434
+  ollama_model         = "qwen2.5:0.5b"
+  asg_min_size         = 2
+  asg_desired_capacity = 2
+  asg_max_size         = 4
+  asg_instance_type    = "t3.micro"
+  cpu_target_value     = 75
 }
 
 module "vpc" {
@@ -143,6 +159,12 @@ module "security_groups" {
           cidr_blocks            = []
           source_security_groups = ["alb"]
         }
+        ollama = {
+          protocol               = "tcp"
+          ports                  = [local.ollama_port]
+          cidr_blocks            = []
+          source_security_groups = ["bastion"]
+        }
       }
       egress = {
         outbound = {
@@ -168,4 +190,74 @@ module "security_groups" {
       egress = {}
     }
   }
+}
+
+module "bastion" {
+  source = "./modules/bastion"
+
+  ami_id             = data.aws_ssm_parameter.amazon_linux_2023_ami.value
+  instance_type      = "t3.micro"
+  subnet_id          = module.vpc.subnet_ids["public"][0]
+  key_pair_name      = var.ec2_key_pair_name
+  security_group_ids = [module.security_groups.security_group_ids["bastion"]]
+  assign_public_ip   = true
+  name               = "${local.project_name}-bastion-server"
+  tags = {
+    Project = local.project_name
+    Role    = "bastion"
+  }
+}
+
+module "asg" {
+  source = "./modules/asg"
+
+  ami_id                 = data.aws_ssm_parameter.amazon_linux_2023_ami.value
+  instance_type          = local.asg_instance_type
+  key_pair_name          = var.ec2_key_pair_name
+  subnet_ids             = module.vpc.subnet_ids["application"]
+  security_group_ids     = [module.security_groups.security_group_ids["application"]]
+  root_volume_size_gib   = 20
+  root_volume_type       = "gp3"
+  root_device_name       = "/dev/xvda"
+  min_size               = local.asg_min_size
+  desired_capacity       = local.asg_desired_capacity
+  max_size               = local.asg_max_size
+  cpu_target_value       = local.cpu_target_value
+  ollama_model           = local.ollama_model
+  ollama_port            = local.ollama_port
+  launch_template_name   = "${local.project_name}-application-launch-template"
+  autoscaling_group_name = "${local.project_name}-application-asg"
+  scaling_policy_name    = "${local.project_name}-cpu-target-tracking"
+  instance_name          = "${local.project_name}-ollama-application-server"
+  tags = {
+    Project = local.project_name
+    Role    = "ollama-application"
+  }
+
+  depends_on = [module.vpc, module.security_groups]
+}
+
+output "bastion_public_ip" {
+  description = "Public IPv4 address of the Bastion Host."
+  value       = module.bastion.public_ip
+}
+
+output "bastion_private_ip" {
+  description = "Private IPv4 address of the Bastion Host."
+  value       = module.bastion.private_ip
+}
+
+output "bastion_instance_id" {
+  description = "EC2 instance ID of the Bastion Host."
+  value       = module.bastion.instance_id
+}
+
+output "application_asg_name" {
+  description = "Name of the Ollama application Auto Scaling Group."
+  value       = module.asg.autoscaling_group_name
+}
+
+output "application_launch_template_id" {
+  description = "Launch template ID used by the Ollama application ASG."
+  value       = module.asg.launch_template_id
 }

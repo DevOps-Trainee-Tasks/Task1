@@ -1,1 +1,3 @@
-ssh_cidr = "ip/32"
+# Copy these values into your local terraform.tfvars.
+ssh_cidr          = "ip/32"
+ec2_key_pair_name = "your-existing-ec2-key-pair-name"
