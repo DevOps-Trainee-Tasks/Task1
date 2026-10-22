@@ -23,6 +23,21 @@ variable "security_group_ids" {
   type        = list(string)
 }
 
+variable "target_group_arns" {
+  description = "Load balancer target groups served by the application ASG."
+  type        = list(string)
+}
+
+variable "health_check_grace_period" {
+  description = "Seconds allowed for instance startup before ELB health checks affect scaling."
+  type        = number
+}
+
+variable "health_check_type" {
+  description = "Health check source used by the ASG."
+  type        = string
+}
+
 variable "root_volume_size_gib" {
   description = "Size of the encrypted root EBS volume in GiB."
   type        = number
@@ -56,6 +71,11 @@ variable "max_size" {
 variable "cpu_target_value" {
   description = "Average CPU utilization target for scaling."
   type        = number
+}
+
+variable "scaling_metric_type" {
+  description = "Predefined metric used for target tracking."
+  type        = string
 }
 
 variable "ollama_model" {

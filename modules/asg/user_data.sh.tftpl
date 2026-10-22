@@ -5,7 +5,6 @@ exec > >(tee -a /var/log/ollama-init.log) 2>&1
 trap 'echo "Ollama initialization failed on line $LINENO" >&2' ERR
 
 echo "Installing Ollama"
-dnf install -y curl
 curl -fsSL https://ollama.com/install.sh -o /tmp/ollama-install.sh
 sh /tmp/ollama-install.sh
 

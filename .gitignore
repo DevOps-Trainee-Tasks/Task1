@@ -1,8 +1,13 @@
 .terraform/
 *.tfstate
 *.tfstate.*
-terraform.tfvars
+.terraform.tfstate.lock.info
 *.tfvars
+*.tfvars.json
+*.tfplan
+.env
+*.pem
+*.key
 crash.log
 crash.*.log
 override.tf

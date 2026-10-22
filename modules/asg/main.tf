@@ -46,11 +46,14 @@ resource "aws_launch_template" "application_launch_template" {
 }
 
 resource "aws_autoscaling_group" "application_autoscaling_group" {
-  name                = var.autoscaling_group_name
-  min_size            = var.min_size
-  desired_capacity    = var.desired_capacity
-  max_size            = var.max_size
-  vpc_zone_identifier = var.subnet_ids
+  name                      = var.autoscaling_group_name
+  min_size                  = var.min_size
+  desired_capacity          = var.desired_capacity
+  max_size                  = var.max_size
+  vpc_zone_identifier       = var.subnet_ids
+  target_group_arns         = var.target_group_arns
+  health_check_type         = var.health_check_type
+  health_check_grace_period = var.health_check_grace_period
 
   launch_template {
     id      = aws_launch_template.application_launch_template.id
@@ -81,7 +84,7 @@ resource "aws_autoscaling_policy" "cpu_target_tracking_policy" {
 
   target_tracking_configuration {
     predefined_metric_specification {
-      predefined_metric_type = "ASGAverageCPUUtilization"
+      predefined_metric_type = var.scaling_metric_type
     }
 
     target_value = var.cpu_target_value

@@ -13,7 +13,7 @@ locals {
       for direction, rule_sets in {
         ingress = security_group.ingress
         egress  = security_group.egress
-      } : [
+        } : [
         for rule_key, rule in rule_sets : [
           for port in concat(rule.ports, rule.protocol == "-1" ? [0] : []) : concat(
             [for cidr in rule.cidr_blocks : {

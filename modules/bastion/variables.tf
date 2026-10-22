@@ -28,6 +28,11 @@ variable "assign_public_ip" {
   type        = bool
 }
 
+variable "iam_instance_profile" {
+  description = "Instance profile used for Systems Manager and database initialization."
+  type        = string
+}
+
 variable "name" {
   description = "AWS Name tag for the Bastion Host."
   type        = string

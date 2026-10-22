@@ -8,7 +8,7 @@ terraform {
 }
 
 provider "aws" {
-  region = "us-east-1"
+  region = local.aws_region
 }
 
 data "aws_ssm_parameter" "amazon_linux_2023_ami" {
@@ -16,7 +16,7 @@ data "aws_ssm_parameter" "amazon_linux_2023_ami" {
 }
 
 variable "ssh_cidr" {
-  description = "Public IP in CIDR form allowed to reach the bastion over SSH."
+  description = "Public IP in CIDR form allowed to reach Bastion SSH and the development ALB."
   type        = string
 }
 
@@ -26,14 +26,12 @@ variable "ec2_key_pair_name" {
 }
 
 locals {
-  project_name         = "task1"
-  ollama_port          = 11434
-  ollama_model         = "qwen2.5:0.5b"
-  asg_min_size         = 2
-  asg_desired_capacity = 2
-  asg_max_size         = 4
-  asg_instance_type    = "t3.micro"
-  cpu_target_value     = 75
+  aws_region    = "us-east-1"
+  project_name  = "task1"
+  http_port     = 80
+  ollama_port   = 11434
+  postgres_port = 5432
+  database_name = "appdb"
 }
 
 module "vpc" {
@@ -113,30 +111,42 @@ module "security_groups" {
         }
       }
       egress = {
-        outbound = {
-          protocol               = "-1"
-          ports                  = []
+        application_ssh = {
+          protocol               = "tcp"
+          ports                  = [22]
+          cidr_blocks            = []
+          source_security_groups = ["application"]
+        }
+        http = {
+          protocol               = "tcp"
+          ports                  = [80, 443]
           cidr_blocks            = ["0.0.0.0/0"]
           source_security_groups = []
+        }
+        database = {
+          protocol               = "tcp"
+          ports                  = [local.postgres_port]
+          cidr_blocks            = []
+          source_security_groups = ["database"]
         }
       }
     }
 
     alb = {
       name        = "${local.project_name}-alb-sg"
-      description = "HTTPS access to the load balancer"
+      description = "HTTP access to the load balancer"
       ingress = {
-        https = {
+        http = {
           protocol               = "tcp"
-          ports                  = [443]
-          cidr_blocks            = ["0.0.0.0/0"]
+          ports                  = [local.http_port]
+          cidr_blocks            = [var.ssh_cidr]
           source_security_groups = []
         }
       }
       egress = {
         application = {
           protocol               = "tcp"
-          ports                  = [3000]
+          ports                  = [local.ollama_port]
           cidr_blocks            = []
           source_security_groups = ["application"]
         }
@@ -155,23 +165,23 @@ module "security_groups" {
         }
         application = {
           protocol               = "tcp"
-          ports                  = [3000]
+          ports                  = [local.ollama_port]
           cidr_blocks            = []
           source_security_groups = ["alb"]
         }
-        ollama = {
-          protocol               = "tcp"
-          ports                  = [local.ollama_port]
-          cidr_blocks            = []
-          source_security_groups = ["bastion"]
-        }
       }
       egress = {
-        outbound = {
-          protocol               = "-1"
-          ports                  = []
+        http = {
+          protocol               = "tcp"
+          ports                  = [80, 443]
           cidr_blocks            = ["0.0.0.0/0"]
           source_security_groups = []
+        }
+        postgres = {
+          protocol               = "tcp"
+          ports                  = [local.postgres_port]
+          cidr_blocks            = []
+          source_security_groups = ["database"]
         }
       }
     }
@@ -182,9 +192,15 @@ module "security_groups" {
       ingress = {
         postgres = {
           protocol               = "tcp"
-          ports                  = [5432]
+          ports                  = [local.postgres_port]
           cidr_blocks            = []
           source_security_groups = ["application"]
+        }
+        initializer = {
+          protocol               = "tcp"
+          ports                  = [local.postgres_port]
+          cidr_blocks            = []
+          source_security_groups = ["bastion"]
         }
       }
       egress = {}
@@ -192,16 +208,85 @@ module "security_groups" {
   }
 }
 
+moved {
+  from = aws_lb.application
+  to   = module.alb.aws_lb.application
+}
+
+moved {
+  from = aws_lb_target_group.ollama
+  to   = module.alb.aws_lb_target_group.application
+}
+
+moved {
+  from = aws_lb_listener.http
+  to   = module.alb.aws_lb_listener.application
+}
+
+module "alb" {
+  source = "./modules/alb"
+
+  name               = "${local.project_name}-alb"
+  internal           = false
+  subnet_ids         = module.vpc.subnet_ids["public"]
+  security_group_ids = [module.security_groups.security_group_ids["alb"]]
+  vpc_id             = module.vpc.vpc_id
+  target_group_name  = "${local.project_name}-ollama"
+  target_port        = local.ollama_port
+  target_protocol    = "HTTP"
+  health_check_path  = "/api/tags"
+  listener_port      = local.http_port
+  listener_protocol  = "HTTP"
+}
+
+resource "aws_iam_role" "bastion" {
+  name = "${local.project_name}-bastion-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = {
+        Service = "ec2.amazonaws.com"
+      }
+      Action = "sts:AssumeRole"
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "bastion_ssm" {
+  role       = aws_iam_role.bastion.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+resource "aws_iam_role_policy" "bastion_db_secret" {
+  name = "${local.project_name}-db-secret-read"
+  role = aws_iam_role.bastion.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = "secretsmanager:GetSecretValue"
+      Resource = module.rds.master_secret_arn
+    }]
+  })
+}
+
+resource "aws_iam_instance_profile" "bastion" {
+  name = "${local.project_name}-bastion-profile"
+  role = aws_iam_role.bastion.name
+}
+
 module "bastion" {
   source = "./modules/bastion"
 
-  ami_id             = data.aws_ssm_parameter.amazon_linux_2023_ami.value
-  instance_type      = "t3.micro"
-  subnet_id          = module.vpc.subnet_ids["public"][0]
-  key_pair_name      = var.ec2_key_pair_name
-  security_group_ids = [module.security_groups.security_group_ids["bastion"]]
-  assign_public_ip   = true
-  name               = "${local.project_name}-bastion-server"
+  ami_id               = data.aws_ssm_parameter.amazon_linux_2023_ami.value
+  instance_type        = "t3.micro"
+  subnet_id            = module.vpc.subnet_ids["public"][0]
+  key_pair_name        = var.ec2_key_pair_name
+  security_group_ids   = [module.security_groups.security_group_ids["bastion"]]
+  assign_public_ip     = true
+  iam_instance_profile = aws_iam_instance_profile.bastion.name
+  name                 = "${local.project_name}-bastion-server"
   tags = {
     Project = local.project_name
     Role    = "bastion"
@@ -211,53 +296,75 @@ module "bastion" {
 module "asg" {
   source = "./modules/asg"
 
-  ami_id                 = data.aws_ssm_parameter.amazon_linux_2023_ami.value
-  instance_type          = local.asg_instance_type
-  key_pair_name          = var.ec2_key_pair_name
-  subnet_ids             = module.vpc.subnet_ids["application"]
-  security_group_ids     = [module.security_groups.security_group_ids["application"]]
-  root_volume_size_gib   = 20
-  root_volume_type       = "gp3"
-  root_device_name       = "/dev/xvda"
-  min_size               = local.asg_min_size
-  desired_capacity       = local.asg_desired_capacity
-  max_size               = local.asg_max_size
-  cpu_target_value       = local.cpu_target_value
-  ollama_model           = local.ollama_model
-  ollama_port            = local.ollama_port
-  launch_template_name   = "${local.project_name}-application-launch-template"
-  autoscaling_group_name = "${local.project_name}-application-asg"
-  scaling_policy_name    = "${local.project_name}-cpu-target-tracking"
-  instance_name          = "${local.project_name}-ollama-application-server"
+  ami_id                    = data.aws_ssm_parameter.amazon_linux_2023_ami.value
+  instance_type             = "t3.small"
+  key_pair_name             = var.ec2_key_pair_name
+  subnet_ids                = module.vpc.subnet_ids["application"]
+  security_group_ids        = [module.security_groups.security_group_ids["application"]]
+  target_group_arns         = [module.alb.target_group_arn]
+  health_check_type         = "ELB"
+  health_check_grace_period = 300
+  root_volume_size_gib      = 20
+  root_volume_type          = "gp3"
+  root_device_name          = "/dev/xvda"
+  min_size                  = 2
+  desired_capacity          = 2
+  max_size                  = 4
+  cpu_target_value          = 75
+  scaling_metric_type       = "ASGAverageCPUUtilization"
+  ollama_model              = "qwen2.5:0.5b"
+  ollama_port               = local.ollama_port
+  launch_template_name      = "${local.project_name}-application-launch-template"
+  autoscaling_group_name    = "${local.project_name}-application-asg"
+  scaling_policy_name       = "${local.project_name}-cpu-target-tracking"
+  instance_name             = "${local.project_name}-ollama-application-server"
   tags = {
     Project = local.project_name
     Role    = "ollama-application"
   }
 
-  depends_on = [module.vpc, module.security_groups]
+  depends_on = [module.vpc, module.security_groups, module.alb]
 }
 
-output "bastion_public_ip" {
-  description = "Public IPv4 address of the Bastion Host."
-  value       = module.bastion.public_ip
+module "rds" {
+  source = "./modules/rds"
+
+  identifier              = "${local.project_name}-postgres"
+  subnet_ids              = module.vpc.subnet_ids["database"]
+  security_group_id       = module.security_groups.security_group_ids["database"]
+  engine_version          = "16.15"
+  instance_class          = "db.t4g.micro"
+  allocated_storage       = 20
+  storage_type            = "gp3"
+  db_name                 = local.database_name
+  username                = "appadmin"
+  port                    = local.postgres_port
+  multi_az                = false
+  backup_retention_period = 0
+  skip_final_snapshot     = true
 }
 
-output "bastion_private_ip" {
-  description = "Private IPv4 address of the Bastion Host."
-  value       = module.bastion.private_ip
-}
+resource "aws_ssm_association" "pgvector" {
+  name             = "AWS-RunShellScript"
+  association_name = "${local.project_name}-pgvector"
 
-output "bastion_instance_id" {
-  description = "EC2 instance ID of the Bastion Host."
-  value       = module.bastion.instance_id
-}
+  targets {
+    key    = "InstanceIds"
+    values = [module.bastion.instance_id]
+  }
 
-output "application_asg_name" {
-  description = "Name of the Ollama application Auto Scaling Group."
-  value       = module.asg.autoscaling_group_name
-}
+  parameters = {
+    commands = templatefile("${path.module}/pgvector-init.sh.tftpl", {
+      aws_region       = local.aws_region
+      secret_arn       = module.rds.master_secret_arn
+      database_address = module.rds.address
+      database_port    = local.postgres_port
+      database_name    = local.database_name
+    })
+    executionTimeout = "1800"
+  }
 
-output "application_launch_template_id" {
-  description = "Launch template ID used by the Ollama application ASG."
-  value       = module.asg.launch_template_id
+  wait_for_success_timeout_seconds = 2400
+
+  depends_on = [module.security_groups, aws_iam_role_policy_attachment.bastion_ssm, aws_iam_role_policy.bastion_db_secret]
 }
