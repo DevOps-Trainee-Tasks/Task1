@@ -7,3 +7,8 @@ output "instance_id" {
   description = "Bastion instance ID for the pgvector initialization association."
   value       = aws_instance.bastion_host.id
 }
+
+output "role_name" {
+  description = "Bastion IAM role name for the database initialization policy."
+  value       = aws_iam_role.bastion.name
+}

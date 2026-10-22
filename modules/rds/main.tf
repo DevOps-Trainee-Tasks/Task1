@@ -22,3 +22,41 @@ resource "aws_db_instance" "postgres" {
   backup_retention_period     = var.backup_retention_period
   skip_final_snapshot         = var.skip_final_snapshot
 }
+
+resource "aws_iam_role_policy" "pgvector_secret" {
+  name = var.pgvector_policy_name
+  role = var.bastion_role_name
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = "secretsmanager:GetSecretValue"
+      Resource = aws_db_instance.postgres.master_user_secret[0].secret_arn
+    }]
+  })
+}
+
+resource "aws_ssm_association" "pgvector" {
+  name             = "AWS-RunShellScript"
+  association_name = var.pgvector_association_name
+
+  targets {
+    key    = "InstanceIds"
+    values = [var.bastion_instance_id]
+  }
+
+  parameters = {
+    commands = templatefile("${path.module}/pgvector-init.sh", {
+      aws_region       = var.aws_region
+      secret_arn       = aws_db_instance.postgres.master_user_secret[0].secret_arn
+      database_address = aws_db_instance.postgres.address
+      database_port    = var.port
+      database_name    = var.db_name
+    })
+    executionTimeout = tostring(var.pgvector_execution_timeout_seconds)
+  }
+
+  wait_for_success_timeout_seconds = var.pgvector_wait_timeout_seconds
+
+  depends_on = [aws_iam_role_policy.pgvector_secret]
+}

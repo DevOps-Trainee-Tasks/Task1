@@ -7,9 +7,13 @@ terraform {
   }
 }
 
+data "aws_ssm_parameter" "ami" {
+  name = var.ami_ssm_parameter_name
+}
+
 resource "aws_launch_template" "application_launch_template" {
   name          = var.launch_template_name
-  image_id      = var.ami_id
+  image_id      = data.aws_ssm_parameter.ami.value
   instance_type = var.instance_type
   key_name      = var.key_pair_name
 
@@ -35,7 +39,7 @@ resource "aws_launch_template" "application_launch_template" {
     http_tokens   = "required"
   }
 
-  user_data = base64encode(templatefile("${path.module}/user_data.sh.tftpl", {
+  user_data = base64encode(templatefile("${path.module}/user_data.sh", {
     ollama_model = var.ollama_model
     ollama_port  = var.ollama_port
   }))

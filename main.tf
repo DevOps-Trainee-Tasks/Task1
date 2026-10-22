@@ -1,39 +1,3 @@
-terraform {
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = ">= 5.0"
-    }
-  }
-}
-
-provider "aws" {
-  region = local.aws_region
-}
-
-data "aws_ssm_parameter" "amazon_linux_2023_ami" {
-  name = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64"
-}
-
-variable "ssh_cidr" {
-  description = "Public IP in CIDR form allowed to reach Bastion SSH and the development ALB."
-  type        = string
-}
-
-variable "ec2_key_pair_name" {
-  description = "Name of an existing AWS EC2 key pair for Bastion and application SSH access."
-  type        = string
-}
-
-locals {
-  aws_region    = "us-east-1"
-  project_name  = "task1"
-  http_port     = 80
-  ollama_port   = 11434
-  postgres_port = 5432
-  database_name = "appdb"
-}
-
 module "vpc" {
   source = "./modules/vpc"
 
@@ -139,7 +103,7 @@ module "security_groups" {
         http = {
           protocol               = "tcp"
           ports                  = [local.http_port]
-          cidr_blocks            = [var.ssh_cidr]
+          cidr_blocks            = ["0.0.0.0/0"]
           source_security_groups = []
         }
       }
@@ -208,21 +172,6 @@ module "security_groups" {
   }
 }
 
-moved {
-  from = aws_lb.application
-  to   = module.alb.aws_lb.application
-}
-
-moved {
-  from = aws_lb_target_group.ollama
-  to   = module.alb.aws_lb_target_group.application
-}
-
-moved {
-  from = aws_lb_listener.http
-  to   = module.alb.aws_lb_listener.application
-}
-
 module "alb" {
   source = "./modules/alb"
 
@@ -239,64 +188,30 @@ module "alb" {
   listener_protocol  = "HTTP"
 }
 
-resource "aws_iam_role" "bastion" {
-  name = "${local.project_name}-bastion-role"
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Principal = {
-        Service = "ec2.amazonaws.com"
-      }
-      Action = "sts:AssumeRole"
-    }]
-  })
-}
-
-resource "aws_iam_role_policy_attachment" "bastion_ssm" {
-  role       = aws_iam_role.bastion.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
-}
-
-resource "aws_iam_role_policy" "bastion_db_secret" {
-  name = "${local.project_name}-db-secret-read"
-  role = aws_iam_role.bastion.id
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect   = "Allow"
-      Action   = "secretsmanager:GetSecretValue"
-      Resource = module.rds.master_secret_arn
-    }]
-  })
-}
-
-resource "aws_iam_instance_profile" "bastion" {
-  name = "${local.project_name}-bastion-profile"
-  role = aws_iam_role.bastion.name
-}
-
 module "bastion" {
   source = "./modules/bastion"
 
-  ami_id               = data.aws_ssm_parameter.amazon_linux_2023_ami.value
-  instance_type        = "t3.micro"
-  subnet_id            = module.vpc.subnet_ids["public"][0]
-  key_pair_name        = var.ec2_key_pair_name
-  security_group_ids   = [module.security_groups.security_group_ids["bastion"]]
-  assign_public_ip     = true
-  iam_instance_profile = aws_iam_instance_profile.bastion.name
-  name                 = "${local.project_name}-bastion-server"
+  ami_ssm_parameter_name = local.ami_ssm_parameter_name
+  instance_type          = "t3.micro"
+  subnet_id              = module.vpc.subnet_ids["public"][0]
+  key_pair_name          = var.ec2_key_pair_name
+  security_group_ids     = [module.security_groups.security_group_ids["bastion"]]
+  assign_public_ip       = true
+  role_name              = "${local.project_name}-bastion-role"
+  instance_profile_name  = "${local.project_name}-bastion-profile"
+  name                   = "${local.project_name}-bastion-server"
   tags = {
     Project = local.project_name
     Role    = "bastion"
   }
+
+  depends_on = [module.vpc, module.security_groups]
 }
 
 module "asg" {
   source = "./modules/asg"
 
-  ami_id                    = data.aws_ssm_parameter.amazon_linux_2023_ami.value
+  ami_ssm_parameter_name    = local.ami_ssm_parameter_name
   instance_type             = "t3.small"
   key_pair_name             = var.ec2_key_pair_name
   subnet_ids                = module.vpc.subnet_ids["application"]
@@ -329,42 +244,26 @@ module "asg" {
 module "rds" {
   source = "./modules/rds"
 
-  identifier              = "${local.project_name}-postgres"
-  subnet_ids              = module.vpc.subnet_ids["database"]
-  security_group_id       = module.security_groups.security_group_ids["database"]
-  engine_version          = "16.15"
-  instance_class          = "db.t4g.micro"
-  allocated_storage       = 20
-  storage_type            = "gp3"
-  db_name                 = local.database_name
-  username                = "appadmin"
-  port                    = local.postgres_port
-  multi_az                = false
-  backup_retention_period = 0
-  skip_final_snapshot     = true
-}
+  identifier                         = "${local.project_name}-postgres"
+  subnet_ids                         = module.vpc.subnet_ids["database"]
+  security_group_id                  = module.security_groups.security_group_ids["database"]
+  engine_version                     = "16.15"
+  instance_class                     = "db.t4g.micro"
+  allocated_storage                  = 20
+  storage_type                       = "gp3"
+  db_name                            = local.database_name
+  username                           = "appadmin"
+  port                               = local.postgres_port
+  multi_az                           = false
+  backup_retention_period            = 0
+  skip_final_snapshot                = true
+  aws_region                         = local.aws_region
+  bastion_instance_id                = module.bastion.instance_id
+  bastion_role_name                  = module.bastion.role_name
+  pgvector_policy_name               = "${local.project_name}-db-secret-read"
+  pgvector_association_name          = "${local.project_name}-pgvector"
+  pgvector_execution_timeout_seconds = 1800
+  pgvector_wait_timeout_seconds      = 2400
 
-resource "aws_ssm_association" "pgvector" {
-  name             = "AWS-RunShellScript"
-  association_name = "${local.project_name}-pgvector"
-
-  targets {
-    key    = "InstanceIds"
-    values = [module.bastion.instance_id]
-  }
-
-  parameters = {
-    commands = templatefile("${path.module}/pgvector-init.sh.tftpl", {
-      aws_region       = local.aws_region
-      secret_arn       = module.rds.master_secret_arn
-      database_address = module.rds.address
-      database_port    = local.postgres_port
-      database_name    = local.database_name
-    })
-    executionTimeout = "1800"
-  }
-
-  wait_for_success_timeout_seconds = 2400
-
-  depends_on = [module.security_groups, aws_iam_role_policy_attachment.bastion_ssm, aws_iam_role_policy.bastion_db_secret]
+  depends_on = [module.security_groups]
 }

@@ -1,5 +1,5 @@
-variable "ami_id" {
-  description = "AMI ID for application instances."
+variable "ami_ssm_parameter_name" {
+  description = "SSM public parameter holding the application AMI ID."
   type        = string
 }
 

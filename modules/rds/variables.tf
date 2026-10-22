@@ -62,3 +62,38 @@ variable "skip_final_snapshot" {
   description = "Whether to omit a final snapshot when deleting the DB instance."
   type        = bool
 }
+
+variable "aws_region" {
+  description = "AWS Region used by the pgvector initialization command."
+  type        = string
+}
+
+variable "bastion_instance_id" {
+  description = "Existing Bastion instance used to initialize pgvector."
+  type        = string
+}
+
+variable "bastion_role_name" {
+  description = "Bastion IAM role granted read access to the RDS-managed secret."
+  type        = string
+}
+
+variable "pgvector_policy_name" {
+  description = "Name of the Bastion policy for the RDS-managed secret."
+  type        = string
+}
+
+variable "pgvector_association_name" {
+  description = "Name of the one-time Systems Manager association."
+  type        = string
+}
+
+variable "pgvector_execution_timeout_seconds" {
+  description = "Maximum duration of the pgvector initialization command."
+  type        = number
+}
+
+variable "pgvector_wait_timeout_seconds" {
+  description = "Time Terraform waits for pgvector initialization to succeed."
+  type        = number
+}

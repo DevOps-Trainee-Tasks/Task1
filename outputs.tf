@@ -3,9 +3,12 @@ output "bastion_public_ip" {
   value       = module.bastion.public_ip
 }
 
-output "alb_dns_name" {
-  description = "Public DNS name of the application load balancer."
-  value       = module.alb.dns_name
+output "alb_endpoints" {
+  description = "Public Ollama API URLs."
+  value = {
+    url      = "http://${module.alb.dns_name}"
+    api_tags = "http://${module.alb.dns_name}/api/tags"
+  }
 }
 
 output "database_endpoint" {

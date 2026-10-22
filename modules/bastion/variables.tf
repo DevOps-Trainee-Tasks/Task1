@@ -1,5 +1,5 @@
-variable "ami_id" {
-  description = "AMI ID for the Bastion Host."
+variable "ami_ssm_parameter_name" {
+  description = "SSM public parameter holding the Bastion AMI ID."
   type        = string
 }
 
@@ -28,8 +28,13 @@ variable "assign_public_ip" {
   type        = bool
 }
 
-variable "iam_instance_profile" {
-  description = "Instance profile used for Systems Manager and database initialization."
+variable "role_name" {
+  description = "IAM role name for the Bastion."
+  type        = string
+}
+
+variable "instance_profile_name" {
+  description = "IAM instance profile name for the Bastion."
   type        = string
 }
 
