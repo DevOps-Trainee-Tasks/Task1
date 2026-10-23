@@ -1,0 +1,100 @@
+name: Terraform Plan
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: terraform-plan-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  plan:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+
+    env:
+      TF_IN_AUTOMATION: "true"
+      TF_INPUT: "false"
+      TF_VAR_ssh_cidr: ${{ vars.SSH_CIDR }}
+      TF_VAR_ec2_key_pair_name: ${{ vars.EC2_KEY_PAIR_NAME }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.13.5"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+          allowed-account-ids: "687078156188"
+          inline-session-policy: >-
+            {
+              "Version":"2012-10-17",
+              "Statement":[
+                {
+                  "Effect":"Allow",
+                  "Action":[
+                    "ec2:Describe*",
+                    "elasticloadbalancing:Describe*",
+                    "autoscaling:Describe*",
+                    "rds:Describe*",
+                    "ssm:GetParameter",
+                    "ssm:GetParameters",
+                    "iam:GetRole",
+                    "iam:GetInstanceProfile",
+                    "iam:List*",
+                    "iam:GetRolePolicy",
+                    "s3:ListBucket"
+                  ],
+                  "Resource":"*"
+                },
+                {
+                  "Effect":"Allow",
+                  "Action":[
+                    "s3:GetObject",
+                    "s3:PutObject"
+                  ],
+                  "Resource":"arn:aws:s3:::task1-tfstate-687078156188/task1/terraform.tfstate"
+                },
+                {
+                  "Effect":"Allow",
+                  "Action":[
+                    "s3:GetObject",
+                    "s3:PutObject",
+                    "s3:DeleteObject"
+                  ],
+                  "Resource":"arn:aws:s3:::task1-tfstate-687078156188/task1/terraform.tfstate.tflock"
+                }
+              ]
+            }
+
+      - name: Verify AWS identity
+        run: aws sts get-caller-identity
+
+      - name: Terraform Init
+        run: terraform init -input=false
+
+      - name: Terraform Format
+        run: terraform fmt -check -recursive
+
+      - name: Terraform Validate
+        run: terraform validate -no-color
+
+      - name: Terraform Plan
+        run: terraform plan -no-color -input=false -lock-timeout=5m
