@@ -44,47 +44,6 @@ jobs:
           aws-region: ${{ vars.AWS_REGION }}
           allowed-account-ids: ${{ vars.ALLOWED_ACCOUNT_IDS }}
 
-          inline-session-policy: >-
-            {
-              "Version":"2012-10-17",
-              "Statement":[
-                {
-                  "Effect":"Allow",
-                  "Action":[
-                    "ec2:Describe*",
-                    "elasticloadbalancing:Describe*",
-                    "autoscaling:Describe*",
-                    "rds:Describe*",
-                    "ssm:GetParameter",
-                    "ssm:GetParameters",
-                    "iam:GetRole",
-                    "iam:GetInstanceProfile",
-                    "iam:List*",
-                    "iam:GetRolePolicy",
-                    "s3:ListBucket"
-                  ],
-                  "Resource":"*"
-                },
-                {
-                  "Effect":"Allow",
-                  "Action":[
-                    "s3:GetObject",
-                    "s3:PutObject"
-                  ],
-                  "Resource":"arn:aws:s3:::task1-tfstate-687078156188/task1/terraform.tfstate"
-                },
-                {
-                  "Effect":"Allow",
-                  "Action":[
-                    "s3:GetObject",
-                    "s3:PutObject",
-                    "s3:DeleteObject"
-                  ],
-                  "Resource":"arn:aws:s3:::task1-tfstate-687078156188/task1/terraform.tfstate.tflock"
-                }
-              ]
-            }
-
       - name: Verify AWS identity
         run: aws sts get-caller-identity
 
