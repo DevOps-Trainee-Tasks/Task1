@@ -39,7 +39,7 @@ resource "aws_launch_template" "application_launch_template" {
     http_tokens   = "required"
   }
 
-  user_data = base64encode(templatefile("${path.module}/user_data.sh", {
+  user_data = base64encode(templatefile(var.user_data_script_path, {
     ollama_model = var.ollama_model
     ollama_port  = var.ollama_port
   }))

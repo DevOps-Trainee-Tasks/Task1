@@ -46,7 +46,7 @@ resource "aws_ssm_association" "pgvector" {
   }
 
   parameters = {
-    commands = templatefile("${path.module}/pgvector-init.sh", {
+    commands = templatefile(var.pgvector_init_script_path, {
       aws_region       = var.aws_region
       secret_arn       = aws_db_instance.postgres.master_user_secret[0].secret_arn
       database_address = aws_db_instance.postgres.address

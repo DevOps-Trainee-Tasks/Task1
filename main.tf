@@ -191,6 +191,7 @@ module "alb" {
 module "bastion" {
   source = "./modules/bastion"
 
+  user_data_script_path  = "${path.root}/scripts/bastion_user_data.sh"
   ami_ssm_parameter_name = local.ami_ssm_parameter_name
   instance_type          = "t3.micro"
   subnet_id              = module.vpc.subnet_ids["public"][0]
@@ -211,6 +212,7 @@ module "bastion" {
 module "asg" {
   source = "./modules/asg"
 
+  user_data_script_path     = "${path.root}/scripts/user_data.sh"
   ami_ssm_parameter_name    = local.ami_ssm_parameter_name
   instance_type             = "t3.small"
   key_pair_name             = var.ec2_key_pair_name
@@ -244,6 +246,7 @@ module "asg" {
 module "rds" {
   source = "./modules/rds"
 
+  pgvector_init_script_path          = "${path.root}/scripts/pgvector-init.sh"
   identifier                         = "${local.project_name}-postgres"
   subnet_ids                         = module.vpc.subnet_ids["database"]
   security_group_id                  = module.security_groups.security_group_ids["database"]

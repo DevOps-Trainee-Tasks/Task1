@@ -1,3 +1,8 @@
+variable "pgvector_init_script_path" {
+  description = "Path to the pgvector initialization script template."
+  type        = string
+}
+
 variable "identifier" {
   description = "Name of the PostgreSQL DB instance."
   type        = string

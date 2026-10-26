@@ -25,7 +25,7 @@ jobs:
     env:
       TF_IN_AUTOMATION: "true"
       TF_INPUT: "false"
-      TF_VAR_ssh_cidr: ${{ vars.SSH_CIDR }}
+      TF_VAR_ssh_cidr: ${{ secrets.SSH_CIDR }}
       TF_VAR_ec2_key_pair_name: ${{ vars.EC2_KEY_PAIR_NAME }}
 
     steps:
@@ -41,48 +41,8 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v6.3.0
         with:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
-          aws-region: us-east-1
-          allowed-account-ids: "687078156188"
-          inline-session-policy: >-
-            {
-              "Version":"2012-10-17",
-              "Statement":[
-                {
-                  "Effect":"Allow",
-                  "Action":[
-                    "ec2:Describe*",
-                    "elasticloadbalancing:Describe*",
-                    "autoscaling:Describe*",
-                    "rds:Describe*",
-                    "ssm:GetParameter",
-                    "ssm:GetParameters",
-                    "iam:GetRole",
-                    "iam:GetInstanceProfile",
-                    "iam:List*",
-                    "iam:GetRolePolicy",
-                    "s3:ListBucket"
-                  ],
-                  "Resource":"*"
-                },
-                {
-                  "Effect":"Allow",
-                  "Action":[
-                    "s3:GetObject",
-                    "s3:PutObject"
-                  ],
-                  "Resource":"arn:aws:s3:::task1-tfstate-687078156188/task1/terraform.tfstate"
-                },
-                {
-                  "Effect":"Allow",
-                  "Action":[
-                    "s3:GetObject",
-                    "s3:PutObject",
-                    "s3:DeleteObject"
-                  ],
-                  "Resource":"arn:aws:s3:::task1-tfstate-687078156188/task1/terraform.tfstate.tflock"
-                }
-              ]
-            }
+          aws-region: ${{ vars.AWS_REGION }}
+          allowed-account-ids: ${{ vars.ALLOWED_ACCOUNT_IDS }}
 
       - name: Verify AWS identity
         run: aws sts get-caller-identity
