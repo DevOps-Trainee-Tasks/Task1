@@ -25,7 +25,7 @@ jobs:
     env:
       TF_IN_AUTOMATION: "true"
       TF_INPUT: "false"
-      TF_VAR_ssh_cidr: ${{ vars.SSH_CIDR }}
+      TF_VAR_ssh_cidr: ${{ secrets.SSH_CIDR }}
       TF_VAR_ec2_key_pair_name: ${{ vars.EC2_KEY_PAIR_NAME }}
 
     steps:
@@ -41,8 +41,9 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v6.3.0
         with:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
-          aws-region: us-east-1
-          allowed-account-ids: "687078156188"
+          aws-region: ${{ vars.AWS_REGION }}
+          allowed-account-ids: ${{ vars.ALLOWED_ACCOUNT_IDS }}
+
           inline-session-policy: >-
             {
               "Version":"2012-10-17",
