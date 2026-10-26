@@ -1,3 +1,8 @@
+variable "user_data_script_path" {
+  description = "Path to the user data template used by application instances."
+  type        = string
+}
+
 variable "ami_ssm_parameter_name" {
   description = "SSM public parameter holding the application AMI ID."
   type        = string

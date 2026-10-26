@@ -17,6 +17,7 @@ jobs:
   apply:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    environment: terraform-apply
 
     env:
       TF_IN_AUTOMATION: "true"
@@ -51,9 +52,6 @@ jobs:
 
       - name: Terraform Plan
         run: terraform plan -input=false -out=tfplan -lock-timeout=5m
-
-      - name: Show Terraform Plan
-        run: terraform show -no-color tfplan
 
       - name: Terraform Apply
         run: terraform apply -input=false -lock-timeout=5m tfplan
