@@ -1,3 +1,8 @@
+variable "user_data_script_path" {
+  description = "Path to the Bastion bootstrap script."
+  type        = string
+}
+
 variable "ami_ssm_parameter_name" {
   description = "SSM public parameter holding the Bastion AMI ID."
   type        = string

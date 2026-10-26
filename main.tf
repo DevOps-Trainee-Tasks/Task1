@@ -191,6 +191,7 @@ module "alb" {
 module "bastion" {
   source = "./modules/bastion"
 
+  user_data_script_path  = "${path.root}/scripts/bastion_user_data.sh"
   ami_ssm_parameter_name = local.ami_ssm_parameter_name
   instance_type          = "t3.micro"
   subnet_id              = module.vpc.subnet_ids["public"][0]

@@ -43,6 +43,7 @@ resource "aws_instance" "bastion_host" {
   vpc_security_group_ids      = var.security_group_ids
   associate_public_ip_address = var.assign_public_ip
   iam_instance_profile        = aws_iam_instance_profile.bastion.name
+  user_data                   = file(var.user_data_script_path)
 
   metadata_options {
     http_endpoint = "enabled"
