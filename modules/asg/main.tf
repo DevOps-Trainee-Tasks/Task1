@@ -1,17 +1,8 @@
-terraform {
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = ">= 5.0"
-    }
-  }
-}
-
 data "aws_ssm_parameter" "ami" {
   name = var.ami_ssm_parameter_name
 }
 
-resource "aws_launch_template" "application_launch_template" {
+resource "aws_launch_template" "application" {
   name          = var.launch_template_name
   image_id      = data.aws_ssm_parameter.ami.value
   instance_type = var.instance_type
@@ -19,7 +10,7 @@ resource "aws_launch_template" "application_launch_template" {
 
   network_interfaces {
     device_index                = 0
-    associate_public_ip_address = false
+    associate_public_ip_address = var.assign_public_ip
     security_groups             = var.security_group_ids
   }
 
@@ -39,17 +30,14 @@ resource "aws_launch_template" "application_launch_template" {
     http_tokens   = "required"
   }
 
-  user_data = base64encode(templatefile(var.user_data_script_path, {
-    ollama_model = var.ollama_model
-    ollama_port  = var.ollama_port
-  }))
+  user_data = base64encode(var.user_data)
 
-  tags = merge(var.tags, {
+  tags = {
     Name = var.launch_template_name
-  })
+  }
 }
 
-resource "aws_autoscaling_group" "application_autoscaling_group" {
+resource "aws_autoscaling_group" "application" {
   name                      = var.autoscaling_group_name
   min_size                  = var.min_size
   desired_capacity          = var.desired_capacity
@@ -60,7 +48,7 @@ resource "aws_autoscaling_group" "application_autoscaling_group" {
   health_check_grace_period = var.health_check_grace_period
 
   launch_template {
-    id      = aws_launch_template.application_launch_template.id
+    id      = aws_launch_template.application.id
     version = "$Latest"
   }
 
@@ -69,26 +57,16 @@ resource "aws_autoscaling_group" "application_autoscaling_group" {
     value               = var.instance_name
     propagate_at_launch = true
   }
-
-  dynamic "tag" {
-    for_each = var.tags
-
-    content {
-      key                 = tag.key
-      value               = tag.value
-      propagate_at_launch = true
-    }
-  }
 }
 
-resource "aws_autoscaling_policy" "cpu_target_tracking_policy" {
+resource "aws_autoscaling_policy" "cpu" {
   name                   = var.scaling_policy_name
-  autoscaling_group_name = aws_autoscaling_group.application_autoscaling_group.name
+  autoscaling_group_name = aws_autoscaling_group.application.name
   policy_type            = "TargetTrackingScaling"
 
   target_tracking_configuration {
     predefined_metric_specification {
-      predefined_metric_type = var.scaling_metric_type
+      predefined_metric_type = "ASGAverageCPUUtilization"
     }
 
     target_value = var.cpu_target_value

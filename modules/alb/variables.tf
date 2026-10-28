@@ -33,11 +33,6 @@ variable "target_port" {
   type        = number
 }
 
-variable "target_protocol" {
-  description = "Protocol served by application instances."
-  type        = string
-}
-
 variable "health_check_path" {
   description = "HTTP path used for target health checks."
   type        = string
@@ -46,9 +41,4 @@ variable "health_check_path" {
 variable "listener_port" {
   description = "Port exposed by the load balancer."
   type        = number
-}
-
-variable "listener_protocol" {
-  description = "Protocol exposed by the load balancer."
-  type        = string
 }

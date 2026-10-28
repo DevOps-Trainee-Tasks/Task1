@@ -9,7 +9,7 @@ resource "aws_lb" "application" {
 resource "aws_lb_target_group" "application" {
   name        = var.target_group_name
   port        = var.target_port
-  protocol    = var.target_protocol
+  protocol    = "HTTP"
   target_type = "instance"
   vpc_id      = var.vpc_id
 
@@ -21,7 +21,7 @@ resource "aws_lb_target_group" "application" {
 resource "aws_lb_listener" "application" {
   load_balancer_arn = aws_lb.application.arn
   port              = var.listener_port
-  protocol          = var.listener_protocol
+  protocol          = "HTTP"
 
   default_action {
     type             = "forward"

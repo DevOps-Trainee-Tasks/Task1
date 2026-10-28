@@ -1,272 +1,130 @@
 module "vpc" {
   source = "./modules/vpc"
 
-  project_name         = local.project_name
-  vpc_cidr             = "10.0.0.0/24"
-  enable_dns_support   = true
-  enable_dns_hostnames = true
-  availability_zones   = ["us-east-1a", "us-east-1b"]
-
-  resource_names = {
-    vpc              = "main-vpc"
-    internet_gateway = "public-internet-gateway"
-    nat_gateway      = "nat-gateway"
-    nat_eip          = "nat-elastic-ip"
-  }
-
-  enable_internet_gateway = true
-  enable_nat_gateway      = true
-
-  subnet_groups = {
-    public = {
-      cidrs                   = ["10.0.0.0/27", "10.0.0.32/27"]
-      map_public_ip_on_launch = true
-      route_table             = "public"
-      name_prefix             = "public-server"
-    }
-    application = {
-      cidrs                   = ["10.0.0.64/27", "10.0.0.96/27"]
-      map_public_ip_on_launch = false
-      route_table             = "private"
-      name_prefix             = "private-application"
-    }
-    database = {
-      cidrs                   = ["10.0.0.128/27", "10.0.0.160/27"]
-      map_public_ip_on_launch = false
-      route_table             = "private"
-      name_prefix             = "private-database"
-    }
-  }
-
-  nat_gateway_subnet = {
-    group = "public"
-    index = 0
-  }
-
-  route_tables = {
-    public = {
-      destination_cidr_block = "0.0.0.0/0"
-      gateway                = "internet"
-      name                   = "public-route-table"
-    }
-    private = {
-      destination_cidr_block = "0.0.0.0/0"
-      gateway                = "nat"
-      name                   = "private-route-table"
-    }
-  }
+  vpc_cidr                       = local.vpc_cidr
+  availability_zones             = local.availability_zones
+  public_subnet_cidrs            = local.public_subnet_cidrs
+  application_subnet_cidrs       = local.application_subnet_cidrs
+  database_subnet_cidrs          = local.database_subnet_cidrs
+  enable_dns_support             = local.enable_dns_support
+  enable_dns_hostnames           = local.enable_dns_hostnames
+  public_subnet_public_ips       = local.public_subnet_public_ips
+  private_subnet_public_ips      = local.private_subnet_public_ips
+  nat_public_subnet_index        = local.nat_public_subnet_index
+  internet_cidr                  = local.internet_cidr
+  vpc_name                       = local.vpc_name
+  internet_gateway_name          = local.internet_gateway_name
+  nat_gateway_name               = local.nat_gateway_name
+  nat_eip_name                   = local.nat_eip_name
+  public_subnet_name_prefix      = local.public_subnet_name_prefix
+  application_subnet_name_prefix = local.application_subnet_name_prefix
+  database_subnet_name_prefix    = local.database_subnet_name_prefix
+  public_route_table_name        = local.public_route_table_name
+  private_route_table_name       = local.private_route_table_name
 }
 
 module "security_groups" {
   source = "./modules/security_groups"
 
-  vpc_id = module.vpc.vpc_id
-
-  security_groups = {
-    bastion = {
-      name        = "${local.project_name}-bastion-sg"
-      description = "SSH access to the bastion"
-      ingress = {
-        ssh = {
-          protocol               = "tcp"
-          ports                  = [22]
-          cidr_blocks            = [var.ssh_cidr]
-          source_security_groups = []
-        }
-      }
-      egress = {
-        application_ssh = {
-          protocol               = "tcp"
-          ports                  = [22]
-          cidr_blocks            = []
-          source_security_groups = ["application"]
-        }
-        http = {
-          protocol               = "tcp"
-          ports                  = [80, 443]
-          cidr_blocks            = ["0.0.0.0/0"]
-          source_security_groups = []
-        }
-        database = {
-          protocol               = "tcp"
-          ports                  = [local.postgres_port]
-          cidr_blocks            = []
-          source_security_groups = ["database"]
-        }
-      }
-    }
-
-    alb = {
-      name        = "${local.project_name}-alb-sg"
-      description = "HTTP access to the load balancer"
-      ingress = {
-        http = {
-          protocol               = "tcp"
-          ports                  = [local.http_port]
-          cidr_blocks            = ["0.0.0.0/0"]
-          source_security_groups = []
-        }
-      }
-      egress = {
-        application = {
-          protocol               = "tcp"
-          ports                  = [local.ollama_port]
-          cidr_blocks            = []
-          source_security_groups = ["application"]
-        }
-      }
-    }
-
-    application = {
-      name        = "${local.project_name}-application-sg"
-      description = "Application instances in private subnets"
-      ingress = {
-        ssh = {
-          protocol               = "tcp"
-          ports                  = [22]
-          cidr_blocks            = []
-          source_security_groups = ["bastion"]
-        }
-        application = {
-          protocol               = "tcp"
-          ports                  = [local.ollama_port]
-          cidr_blocks            = []
-          source_security_groups = ["alb"]
-        }
-      }
-      egress = {
-        http = {
-          protocol               = "tcp"
-          ports                  = [80, 443]
-          cidr_blocks            = ["0.0.0.0/0"]
-          source_security_groups = []
-        }
-        postgres = {
-          protocol               = "tcp"
-          ports                  = [local.postgres_port]
-          cidr_blocks            = []
-          source_security_groups = ["database"]
-        }
-      }
-    }
-
-    database = {
-      name        = "${local.project_name}-database-sg"
-      description = "PostgreSQL database in private subnets"
-      ingress = {
-        postgres = {
-          protocol               = "tcp"
-          ports                  = [local.postgres_port]
-          cidr_blocks            = []
-          source_security_groups = ["application"]
-        }
-        initializer = {
-          protocol               = "tcp"
-          ports                  = [local.postgres_port]
-          cidr_blocks            = []
-          source_security_groups = ["bastion"]
-        }
-      }
-      egress = {}
-    }
-  }
-}
-
-module "alb" {
-  source = "./modules/alb"
-
-  name               = "${local.project_name}-alb"
-  internal           = false
-  subnet_ids         = module.vpc.subnet_ids["public"]
-  security_group_ids = [module.security_groups.security_group_ids["alb"]]
-  vpc_id             = module.vpc.vpc_id
-  target_group_name  = "${local.project_name}-ollama"
-  target_port        = local.ollama_port
-  target_protocol    = "HTTP"
-  health_check_path  = "/api/tags"
-  listener_port      = local.http_port
-  listener_protocol  = "HTTP"
+  vpc_id              = module.vpc.vpc_id
+  bastion_name        = local.bastion_security_group_name
+  alb_name            = local.alb_security_group_name
+  application_name    = local.application_security_group_name
+  database_name       = local.database_security_group_name
+  allowed_client_cidr = local.allowed_client_cidr
+  internet_cidr       = local.internet_cidr
+  ssh_port            = local.ssh_port
+  http_port           = local.http_port
+  https_port          = local.https_port
+  ollama_port         = local.ollama_port
+  postgres_port       = local.postgres_port
 }
 
 module "bastion" {
   source = "./modules/bastion"
 
-  user_data_script_path  = "${path.root}/scripts/bastion_user_data.sh"
-  ami_ssm_parameter_name = local.ami_ssm_parameter_name
-  instance_type          = "t3.micro"
-  subnet_id              = module.vpc.subnet_ids["public"][0]
-  key_pair_name          = var.ec2_key_pair_name
-  security_group_ids     = [module.security_groups.security_group_ids["bastion"]]
-  assign_public_ip       = true
-  role_name              = "${local.project_name}-bastion-role"
-  instance_profile_name  = "${local.project_name}-bastion-profile"
-  name                   = "${local.project_name}-bastion-server"
-  tags = {
-    Project = local.project_name
-    Role    = "bastion"
-  }
+  user_data = file("${path.root}/scripts/bastion-user-data.sh")
 
-  depends_on = [module.vpc, module.security_groups]
+  ami_ssm_parameter_name = local.ami_ssm_parameter_name
+  instance_type          = local.bastion_instance_type
+  subnet_id              = module.vpc.public_subnet_ids[0]
+  key_pair_name          = var.ec2_key_pair_name
+  security_group_ids     = [module.security_groups.bastion_id]
+  assign_public_ip       = local.bastion_assign_public_ip
+  role_name              = local.bastion_role_name
+  instance_profile_name  = local.bastion_instance_profile_name
+  name                   = local.bastion_name
+}
+
+module "alb" {
+  source = "./modules/alb"
+
+  name               = local.alb_name
+  internal           = local.alb_internal
+  subnet_ids         = module.vpc.public_subnet_ids
+  security_group_ids = [module.security_groups.alb_id]
+  vpc_id             = module.vpc.vpc_id
+  target_group_name  = local.target_group_name
+  target_port        = local.ollama_port
+  health_check_path  = local.health_check_path
+  listener_port      = local.http_port
 }
 
 module "asg" {
   source = "./modules/asg"
 
-  user_data_script_path     = "${path.root}/scripts/user_data.sh"
-  ami_ssm_parameter_name    = local.ami_ssm_parameter_name
-  instance_type             = "t3.small"
-  key_pair_name             = var.ec2_key_pair_name
-  subnet_ids                = module.vpc.subnet_ids["application"]
-  security_group_ids        = [module.security_groups.security_group_ids["application"]]
-  target_group_arns         = [module.alb.target_group_arn]
-  health_check_type         = "ELB"
-  health_check_grace_period = 300
-  root_volume_size_gib      = 20
-  root_volume_type          = "gp3"
-  root_device_name          = "/dev/xvda"
-  min_size                  = 2
-  desired_capacity          = 2
-  max_size                  = 4
-  cpu_target_value          = 75
-  scaling_metric_type       = "ASGAverageCPUUtilization"
-  ollama_model              = "qwen2.5:0.5b"
-  ollama_port               = local.ollama_port
-  launch_template_name      = "${local.project_name}-application-launch-template"
-  autoscaling_group_name    = "${local.project_name}-application-asg"
-  scaling_policy_name       = "${local.project_name}-cpu-target-tracking"
-  instance_name             = "${local.project_name}-ollama-application-server"
-  tags = {
-    Project = local.project_name
-    Role    = "ollama-application"
-  }
+  user_data = templatefile("${path.root}/scripts/ollama-user-data.sh", {
+    ollama_model = local.ollama_model
+    ollama_port  = local.ollama_port
+  })
 
-  depends_on = [module.vpc, module.security_groups, module.alb]
+  ami_ssm_parameter_name    = local.ami_ssm_parameter_name
+  instance_type             = local.application_instance_type
+  assign_public_ip          = local.application_assign_public_ip
+  key_pair_name             = var.ec2_key_pair_name
+  subnet_ids                = module.vpc.application_subnet_ids
+  security_group_ids        = [module.security_groups.application_id]
+  target_group_arns         = [module.alb.target_group_arn]
+  health_check_type         = local.asg_health_check_type
+  health_check_grace_period = local.asg_health_check_grace_period
+  root_volume_size_gib      = local.root_volume_size_gib
+  root_volume_type          = local.root_volume_type
+  root_device_name          = local.root_device_name
+  min_size                  = local.asg_min_size
+  desired_capacity          = local.asg_desired_capacity
+  max_size                  = local.asg_max_size
+  cpu_target_value          = local.asg_cpu_target
+  launch_template_name      = local.launch_template_name
+  autoscaling_group_name    = local.asg_name
+  scaling_policy_name       = local.scaling_policy_name
+  instance_name             = local.application_instance_name
 }
 
 module "rds" {
   source = "./modules/rds"
 
-  pgvector_init_script_path          = "${path.root}/scripts/pgvector-init.sh"
-  identifier                         = "${local.project_name}-postgres"
-  subnet_ids                         = module.vpc.subnet_ids["database"]
-  security_group_id                  = module.security_groups.security_group_ids["database"]
-  engine_version                     = "16.15"
-  instance_class                     = "db.t4g.micro"
-  allocated_storage                  = 20
-  storage_type                       = "gp3"
+  pgvector_init_script_path = "${path.root}/scripts/pgvector-init.sh"
+
+  identifier                         = local.database_identifier
+  subnet_group_name                  = local.database_subnet_group_name
+  subnet_ids                         = module.vpc.database_subnet_ids
+  security_group_id                  = module.security_groups.database_id
+  engine_version                     = local.database_engine_version
+  instance_class                     = local.database_instance_class
+  allocated_storage                  = local.database_allocated_storage
+  storage_type                       = local.database_storage_type
   db_name                            = local.database_name
-  username                           = "appadmin"
+  username                           = local.database_username
   port                               = local.postgres_port
-  multi_az                           = false
-  backup_retention_period            = 0
-  skip_final_snapshot                = true
+  publicly_accessible                = local.database_publicly_accessible
+  multi_az                           = local.database_multi_az
+  backup_retention_period            = local.database_backup_retention
+  skip_final_snapshot                = local.database_skip_final_snapshot
   aws_region                         = local.aws_region
   bastion_instance_id                = module.bastion.instance_id
   bastion_role_name                  = module.bastion.role_name
-  pgvector_policy_name               = "${local.project_name}-db-secret-read"
-  pgvector_association_name          = "${local.project_name}-pgvector"
-  pgvector_execution_timeout_seconds = 1800
-  pgvector_wait_timeout_seconds      = 2400
-
-  depends_on = [module.security_groups]
+  pgvector_policy_name               = local.pgvector_policy_name
+  pgvector_association_name          = local.pgvector_association_name
+  pgvector_execution_timeout_seconds = local.pgvector_execution_timeout_seconds
+  pgvector_wait_timeout_seconds      = local.pgvector_wait_timeout_seconds
 }

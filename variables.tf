@@ -1,6 +1,7 @@
 variable "ssh_cidr" {
-  description = "Public IP in CIDR form allowed to reach the bastion over SSH."
+  description = "Approved public IPv4 CIDR for bastion SSH and ALB HTTP access."
   type        = string
+
 }
 
 variable "ec2_key_pair_name" {

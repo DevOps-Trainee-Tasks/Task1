@@ -1,3 +1,4 @@
 # Copy these values into your local terraform.tfvars.
+# This CIDR allows BOTH bastion SSH and ALB HTTP; other client IPs are blocked.
 ssh_cidr          = "ip/32"
 ec2_key_pair_name = "your-existing-ec2-key-pair-name"

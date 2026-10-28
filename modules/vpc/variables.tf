@@ -1,71 +1,99 @@
-variable "project_name" {
-  description = "Project prefix used for AWS Name tags."
-  type        = string
-}
-
-variable "resource_names" {
-  description = "Names for the VPC, Internet gateway, NAT gateway, and NAT Elastic IP."
-  type = object({
-    vpc              = string
-    internet_gateway = string
-    nat_gateway      = string
-    nat_eip          = string
-  })
-}
-
 variable "vpc_cidr" {
-  description = "CIDR block for the VPC."
+  description = "IPv4 CIDR for the VPC."
   type        = string
+}
+
+variable "availability_zones" {
+  description = "AZs cycled independently for public, application, and database subnets."
+  type        = list(string)
+}
+
+variable "public_subnet_cidrs" {
+  description = "Public subnet CIDRs in allocation order."
+  type        = list(string)
+}
+
+variable "application_subnet_cidrs" {
+  description = "Private application subnet CIDRs in allocation order."
+  type        = list(string)
+}
+
+variable "database_subnet_cidrs" {
+  description = "Private database subnet CIDRs in allocation order."
+  type        = list(string)
 }
 
 variable "enable_dns_support" {
-  description = "Whether the VPC supports DNS resolution."
+  description = "Enable DNS resolution in the VPC."
   type        = bool
 }
 
 variable "enable_dns_hostnames" {
-  description = "Whether the VPC assigns DNS hostnames."
+  description = "Enable DNS hostnames in the VPC."
   type        = bool
 }
 
-variable "availability_zones" {
-  description = "Availability zones assigned to each subnet group in round-robin order."
-  type        = list(string)
-}
-
-variable "enable_internet_gateway" {
-  description = "Whether to create an Internet gateway and its configured routes."
+variable "public_subnet_public_ips" {
+  description = "Automatically assign public IPs in public subnets."
   type        = bool
 }
 
-variable "enable_nat_gateway" {
-  description = "Whether to create one NAT gateway, its Elastic IP, and configured routes."
+variable "private_subnet_public_ips" {
+  description = "Automatically assign public IPs in private subnets; keep false."
   type        = bool
 }
 
-variable "subnet_groups" {
-  description = "Subnet groups, their CIDRs, public IP behavior, and route table keys."
-  type = map(object({
-    cidrs                   = list(string)
-    map_public_ip_on_launch = bool
-    route_table             = string
-    name_prefix             = string
-  }))
+variable "nat_public_subnet_index" {
+  description = "Zero-based public subnet index for the NAT Gateway."
+  type        = number
 }
 
-variable "route_tables" {
-  description = "Route tables with a default route through the internet or NAT gateway."
-  type = map(object({
-    destination_cidr_block = string
-    gateway                = string
-    name                   = string
-  }))
+variable "internet_cidr" {
+  description = "Default route destination for internet traffic."
+  type        = string
 }
 
-variable "nat_gateway_subnet" {
-  description = "Subnet group and zero-based subnet index that hosts the NAT gateway."
-  type = object({
-    group = string
-    index = number
-  })
+variable "vpc_name" {
+  description = "Vpc name."
+  type        = string
+}
+
+variable "internet_gateway_name" {
+  description = "Internet gateway name."
+  type        = string
+}
+
+variable "nat_gateway_name" {
+  description = "Name tag for the NAT Gateway."
+  type        = string
+}
+
+variable "nat_eip_name" {
+  description = "Name tag for the NAT Elastic IP."
+  type        = string
+}
+
+variable "public_subnet_name_prefix" {
+  description = "Public subnet name prefix."
+  type        = string
+}
+
+variable "application_subnet_name_prefix" {
+  description = "Application subnet name prefix."
+  type        = string
+}
+
+variable "database_subnet_name_prefix" {
+  description = "Database subnet name prefix."
+  type        = string
+}
+
+variable "public_route_table_name" {
+  description = "Public route table name."
+  type        = string
+}
+
+variable "private_route_table_name" {
+  description = "Private route table name."
+  type        = string
 }

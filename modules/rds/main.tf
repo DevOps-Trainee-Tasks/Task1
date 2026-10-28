@@ -1,5 +1,5 @@
 resource "aws_db_subnet_group" "database" {
-  name       = "${var.identifier}-subnets"
+  name       = var.subnet_group_name
   subnet_ids = var.subnet_ids
 }
 
@@ -16,7 +16,7 @@ resource "aws_db_instance" "postgres" {
   manage_master_user_password = true
   db_subnet_group_name        = aws_db_subnet_group.database.name
   vpc_security_group_ids      = [var.security_group_id]
-  publicly_accessible         = false
+  publicly_accessible         = var.publicly_accessible
   port                        = var.port
   multi_az                    = var.multi_az
   backup_retention_period     = var.backup_retention_period
@@ -58,5 +58,6 @@ resource "aws_ssm_association" "pgvector" {
 
   wait_for_success_timeout_seconds = var.pgvector_wait_timeout_seconds
 
+  # The association needs the secret permission before it runs on the bastion.
   depends_on = [aws_iam_role_policy.pgvector_secret]
 }

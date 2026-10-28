@@ -1,93 +1,140 @@
-terraform {
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = ">= 5.0"
-    }
-  }
-}
-
-locals {
-  rules = flatten([
-    for security_group_key, security_group in var.security_groups : [
-      for direction, rule_sets in {
-        ingress = security_group.ingress
-        egress  = security_group.egress
-        } : [
-        for rule_key, rule in rule_sets : [
-          for port in concat(rule.ports, rule.protocol == "-1" ? [0] : []) : concat(
-            [for cidr in rule.cidr_blocks : {
-              security_group_key = security_group_key
-              direction          = direction
-              rule_key           = rule_key
-              protocol           = rule.protocol
-              port               = port
-              source_type        = "cidr"
-              source             = cidr
-            }],
-            [for source_group in rule.source_security_groups : {
-              security_group_key = security_group_key
-              direction          = direction
-              rule_key           = rule_key
-              protocol           = rule.protocol
-              port               = port
-              source_type        = "security_group"
-              source             = source_group
-            }]
-          )
-        ]
-      ]
-    ]
-  ])
-}
-
-resource "aws_security_group" "security_groups" {
-  for_each = var.security_groups
-
-  name        = each.value.name
-  description = each.value.description
+resource "aws_security_group" "bastion" {
+  name        = var.bastion_name
+  description = "SSH access to the bastion"
   vpc_id      = var.vpc_id
-
-  tags = {
-    Name = each.value.name
-  }
+  tags        = { Name = var.bastion_name }
 }
 
-resource "aws_vpc_security_group_ingress_rule" "ingress_rules" {
-  for_each = {
-    for rule in local.rules : jsonencode([
-      rule.security_group_key, rule.rule_key, rule.port, rule.source_type, rule.source
-    ]) => rule if rule.direction == "ingress"
-  }
-
-  security_group_id            = aws_security_group.security_groups[each.value.security_group_key].id
-  cidr_ipv4                    = each.value.source_type == "cidr" ? each.value.source : null
-  referenced_security_group_id = each.value.source_type == "security_group" ? aws_security_group.security_groups[each.value.source].id : null
-  ip_protocol                  = each.value.protocol
-  from_port                    = each.value.protocol == "-1" ? null : each.value.port
-  to_port                      = each.value.protocol == "-1" ? null : each.value.port
-
-  tags = {
-    Name = "${var.security_groups[each.value.security_group_key].name}-${each.value.rule_key}-ingress-${each.value.protocol == "-1" ? "all" : tostring(each.value.port)}"
-  }
+resource "aws_security_group" "alb" {
+  name        = var.alb_name
+  description = "HTTP access to the load balancer"
+  vpc_id      = var.vpc_id
+  tags        = { Name = var.alb_name }
 }
 
-resource "aws_vpc_security_group_egress_rule" "egress_rules" {
-  for_each = {
-    for rule in local.rules : jsonencode([
-      rule.security_group_key, rule.rule_key, rule.port, rule.source_type, rule.source
-    ]) => rule if rule.direction == "egress"
-  }
-
-  security_group_id            = aws_security_group.security_groups[each.value.security_group_key].id
-  cidr_ipv4                    = each.value.source_type == "cidr" ? each.value.source : null
-  referenced_security_group_id = each.value.source_type == "security_group" ? aws_security_group.security_groups[each.value.source].id : null
-  ip_protocol                  = each.value.protocol
-  from_port                    = each.value.protocol == "-1" ? null : each.value.port
-  to_port                      = each.value.protocol == "-1" ? null : each.value.port
-
-  tags = {
-    Name = "${var.security_groups[each.value.security_group_key].name}-${each.value.rule_key}-egress-${each.value.protocol == "-1" ? "all" : tostring(each.value.port)}"
-  }
+resource "aws_security_group" "application" {
+  name        = var.application_name
+  description = "Application instances in private subnets"
+  vpc_id      = var.vpc_id
+  tags        = { Name = var.application_name }
 }
 
+resource "aws_security_group" "database" {
+  name        = var.database_name
+  description = "PostgreSQL database in private subnets"
+  vpc_id      = var.vpc_id
+  tags        = { Name = var.database_name }
+}
+
+resource "aws_vpc_security_group_ingress_rule" "bastion_ssh" {
+  security_group_id = aws_security_group.bastion.id
+  cidr_ipv4         = var.allowed_client_cidr
+  ip_protocol       = "tcp"
+  from_port         = var.ssh_port
+  to_port           = var.ssh_port
+}
+
+resource "aws_vpc_security_group_ingress_rule" "alb_http" {
+  security_group_id = aws_security_group.alb.id
+  cidr_ipv4         = var.allowed_client_cidr
+  ip_protocol       = "tcp"
+  from_port         = var.http_port
+  to_port           = var.http_port
+}
+
+resource "aws_vpc_security_group_ingress_rule" "application_ssh" {
+  security_group_id            = aws_security_group.application.id
+  referenced_security_group_id = aws_security_group.bastion.id
+  ip_protocol                  = "tcp"
+  from_port                    = var.ssh_port
+  to_port                      = var.ssh_port
+}
+
+resource "aws_vpc_security_group_ingress_rule" "application_from_alb" {
+  security_group_id            = aws_security_group.application.id
+  referenced_security_group_id = aws_security_group.alb.id
+  ip_protocol                  = "tcp"
+  from_port                    = var.ollama_port
+  to_port                      = var.ollama_port
+}
+
+resource "aws_vpc_security_group_ingress_rule" "database_from_application" {
+  security_group_id            = aws_security_group.database.id
+  referenced_security_group_id = aws_security_group.application.id
+  ip_protocol                  = "tcp"
+  from_port                    = var.postgres_port
+  to_port                      = var.postgres_port
+}
+
+resource "aws_vpc_security_group_ingress_rule" "database_from_bastion" {
+  security_group_id            = aws_security_group.database.id
+  referenced_security_group_id = aws_security_group.bastion.id
+  ip_protocol                  = "tcp"
+  from_port                    = var.postgres_port
+  to_port                      = var.postgres_port
+}
+
+resource "aws_vpc_security_group_egress_rule" "bastion_to_application" {
+  security_group_id            = aws_security_group.bastion.id
+  referenced_security_group_id = aws_security_group.application.id
+  ip_protocol                  = "tcp"
+  from_port                    = var.ssh_port
+  to_port                      = var.ssh_port
+}
+
+resource "aws_vpc_security_group_egress_rule" "bastion_to_database" {
+  security_group_id            = aws_security_group.bastion.id
+  referenced_security_group_id = aws_security_group.database.id
+  ip_protocol                  = "tcp"
+  from_port                    = var.postgres_port
+  to_port                      = var.postgres_port
+}
+
+# HTTP/HTTPS downloads use changing public IPs; see README for the egress trade-off.
+resource "aws_vpc_security_group_egress_rule" "bastion_http" {
+  security_group_id = aws_security_group.bastion.id
+  cidr_ipv4         = var.internet_cidr
+  ip_protocol       = "tcp"
+  from_port         = var.http_port
+  to_port           = var.http_port
+}
+
+resource "aws_vpc_security_group_egress_rule" "bastion_https" {
+  security_group_id = aws_security_group.bastion.id
+  cidr_ipv4         = var.internet_cidr
+  ip_protocol       = "tcp"
+  from_port         = var.https_port
+  to_port           = var.https_port
+}
+
+resource "aws_vpc_security_group_egress_rule" "alb_to_application" {
+  security_group_id            = aws_security_group.alb.id
+  referenced_security_group_id = aws_security_group.application.id
+  ip_protocol                  = "tcp"
+  from_port                    = var.ollama_port
+  to_port                      = var.ollama_port
+}
+
+resource "aws_vpc_security_group_egress_rule" "application_to_database" {
+  security_group_id            = aws_security_group.application.id
+  referenced_security_group_id = aws_security_group.database.id
+  ip_protocol                  = "tcp"
+  from_port                    = var.postgres_port
+  to_port                      = var.postgres_port
+}
+
+resource "aws_vpc_security_group_egress_rule" "application_http" {
+  security_group_id = aws_security_group.application.id
+  cidr_ipv4         = var.internet_cidr
+  ip_protocol       = "tcp"
+  from_port         = var.http_port
+  to_port           = var.http_port
+}
+
+resource "aws_vpc_security_group_egress_rule" "application_https" {
+  security_group_id = aws_security_group.application.id
+  cidr_ipv4         = var.internet_cidr
+  ip_protocol       = "tcp"
+  from_port         = var.https_port
+  to_port           = var.https_port
+}

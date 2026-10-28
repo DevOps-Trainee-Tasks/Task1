@@ -3,22 +3,57 @@ variable "vpc_id" {
   type        = string
 }
 
-variable "security_groups" {
-  description = "Security groups and their ingress and egress rule sets. Ports are TCP or UDP; use protocol -1 with an empty ports list for all traffic."
-  type = map(object({
-    name        = string
-    description = string
-    ingress = map(object({
-      protocol               = string
-      ports                  = list(number)
-      cidr_blocks            = list(string)
-      source_security_groups = list(string)
-    }))
-    egress = map(object({
-      protocol               = string
-      ports                  = list(number)
-      cidr_blocks            = list(string)
-      source_security_groups = list(string)
-    }))
-  }))
+variable "bastion_name" {
+  description = "Existing bastion security group name."
+  type        = string
+}
+
+variable "alb_name" {
+  description = "Existing alb security group name."
+  type        = string
+}
+
+variable "application_name" {
+  description = "Existing application security group name."
+  type        = string
+}
+
+variable "database_name" {
+  description = "Existing database security group name."
+  type        = string
+}
+
+variable "allowed_client_cidr" {
+  description = "Approved IPv4 CIDR for bastion SSH and ALB HTTP."
+  type        = string
+}
+
+variable "internet_cidr" {
+  description = "Internet destination for required HTTP and HTTPS downloads."
+  type        = string
+}
+
+variable "ssh_port" {
+  description = "Ssh TCP port."
+  type        = number
+}
+
+variable "http_port" {
+  description = "Http TCP port."
+  type        = number
+}
+
+variable "https_port" {
+  description = "Https TCP port."
+  type        = number
+}
+
+variable "ollama_port" {
+  description = "Ollama TCP port."
+  type        = number
+}
+
+variable "postgres_port" {
+  description = "Postgres TCP port."
+  type        = number
 }

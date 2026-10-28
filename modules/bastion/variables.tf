@@ -1,8 +1,3 @@
-variable "user_data_script_path" {
-  description = "Path to the Bastion bootstrap script."
-  type        = string
-}
-
 variable "ami_ssm_parameter_name" {
   description = "SSM public parameter holding the Bastion AMI ID."
   type        = string
@@ -48,7 +43,7 @@ variable "name" {
   type        = string
 }
 
-variable "tags" {
-  description = "Additional tags for the Bastion Host."
-  type        = map(string)
+variable "user_data" {
+  description = "Bootstrap script content supplied by the root module."
+  type        = string
 }

@@ -1,8 +1,3 @@
-variable "user_data_script_path" {
-  description = "Path to the user data template used by application instances."
-  type        = string
-}
-
 variable "ami_ssm_parameter_name" {
   description = "SSM public parameter holding the application AMI ID."
   type        = string
@@ -78,21 +73,6 @@ variable "cpu_target_value" {
   type        = number
 }
 
-variable "scaling_metric_type" {
-  description = "Predefined metric used for target tracking."
-  type        = string
-}
-
-variable "ollama_model" {
-  description = "Ollama model downloaded on each new instance."
-  type        = string
-}
-
-variable "ollama_port" {
-  description = "Private port used by the Ollama service."
-  type        = number
-}
-
 variable "launch_template_name" {
   description = "Name of the EC2 Launch Template."
   type        = string
@@ -113,7 +93,12 @@ variable "instance_name" {
   type        = string
 }
 
-variable "tags" {
-  description = "Additional tags for the Launch Template, ASG, and instances."
-  type        = map(string)
+variable "assign_public_ip" {
+  description = "Whether application interfaces receive public IPs; keep false for private instances."
+  type        = bool
+}
+
+variable "user_data" {
+  description = "Bootstrap script content supplied by the root module."
+  type        = string
 }

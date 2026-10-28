@@ -26,5 +26,5 @@ for attempt in $(seq 1 30); do
 done
 
 curl -fsS "http://127.0.0.1:${ollama_port}/api/tags" >/dev/null
-ollama pull "${ollama_model}"
+runuser -u ollama -- env OLLAMA_HOST="127.0.0.1:${ollama_port}" ollama pull "${ollama_model}"
 echo "Ollama initialization completed"

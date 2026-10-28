@@ -1,12 +1,3 @@
-terraform {
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = ">= 5.0"
-    }
-  }
-}
-
 data "aws_ssm_parameter" "ami" {
   name = var.ami_ssm_parameter_name
 }
@@ -35,7 +26,7 @@ resource "aws_iam_instance_profile" "bastion" {
   role = aws_iam_role.bastion.name
 }
 
-resource "aws_instance" "bastion_host" {
+resource "aws_instance" "bastion" {
   ami                         = data.aws_ssm_parameter.ami.value
   instance_type               = var.instance_type
   subnet_id                   = var.subnet_id
@@ -43,16 +34,17 @@ resource "aws_instance" "bastion_host" {
   vpc_security_group_ids      = var.security_group_ids
   associate_public_ip_address = var.assign_public_ip
   iam_instance_profile        = aws_iam_instance_profile.bastion.name
-  user_data                   = file(var.user_data_script_path)
+  user_data                   = var.user_data
 
   metadata_options {
     http_endpoint = "enabled"
     http_tokens   = "required"
   }
 
-  tags = merge(var.tags, {
+  tags = {
     Name = var.name
-  })
+  }
 
+  # The profile alone does not wait for its SSM permissions.
   depends_on = [aws_iam_role_policy_attachment.ssm]
 }

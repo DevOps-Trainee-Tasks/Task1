@@ -1,8 +1,3 @@
-variable "pgvector_init_script_path" {
-  description = "Path to the pgvector initialization script template."
-  type        = string
-}
-
 variable "identifier" {
   description = "Name of the PostgreSQL DB instance."
   type        = string
@@ -101,4 +96,19 @@ variable "pgvector_execution_timeout_seconds" {
 variable "pgvector_wait_timeout_seconds" {
   description = "Time Terraform waits for pgvector initialization to succeed."
   type        = number
+}
+
+variable "subnet_group_name" {
+  description = "Existing RDS subnet group name."
+  type        = string
+}
+
+variable "publicly_accessible" {
+  description = "Whether RDS has public access; keep false for this private database."
+  type        = bool
+}
+
+variable "pgvector_init_script_path" {
+  description = "Root script template rendered with the RDS endpoint and secret ARN."
+  type        = string
 }
